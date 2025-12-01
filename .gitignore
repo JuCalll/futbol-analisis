@@ -1,0 +1,12 @@
+# Ignorar compilados
+bin/
+*.class
+
+# Ignorar configuraciones de editor
+.vscode/
+.idea/
+*.iml
+
+# Ignorar archivos del sistema
+.DS_Store
+Thumbs.db
