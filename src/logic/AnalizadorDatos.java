@@ -6,62 +6,85 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class AnalizadorDatos {
     private List<Partido> partidos;
+    // Regla de Sonar: Usar Logger en lugar de System.out
+    private static final Logger LOGGER = Logger.getLogger(AnalizadorDatos.class.getName());
 
     public AnalizadorDatos() {
         this.partidos = new ArrayList<>();
     }
 
     public void cargarDatos(String rutaArchivo) {
-        String linea = "";
         try (BufferedReader br = new BufferedReader(new FileReader(rutaArchivo))) {
             br.readLine(); // Leer cabecera
+            String linea;
             
             while ((linea = br.readLine()) != null) {
-                String[] datos = linea.split(",");
-                if(datos.length >= 5) {
-                    try {
-                        String local = datos[1];
-                        String visitante = datos[2];
-                        int golesL = Integer.parseInt(datos[3]);
-                        int golesV = Integer.parseInt(datos[4]);
-                        String torneo = datos[5];
-    
-                        partidos.add(new Partido(local, visitante, golesL, golesV, torneo));
-                    } catch (NumberFormatException e) {
-                        continue;
-                    }
-                }
+                procesarLinea(linea);
             }
-            System.out.println("Carga exitosa: " + partidos.size() + " partidos.");
+            LOGGER.log(Level.INFO, "Carga exitosa: {0} partidos.", partidos.size());
         } catch (IOException e) {
-            System.err.println("Error critico: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Error critico al leer el archivo", e);
+        }
+    }
+
+    // Refactorización: Extraer método para reducir complejidad cognitiva
+    private void procesarLinea(String linea) {
+        String[] datos = linea.split(",");
+        if (datos.length < 5) {
+            return;
+        }
+        
+        try {
+            String local = datos[1];
+            String visitante = datos[2];
+            int golesL = Integer.parseInt(datos[3]);
+            int golesV = Integer.parseInt(datos[4]);
+            String torneo = datos[5];
+
+            partidos.add(new Partido(local, visitante, golesL, golesV, torneo));
+        } catch (NumberFormatException e) {
+            // Se ignora la línea corrupta pero no se detiene el proceso
+            LOGGER.log(Level.WARNING, "Linea ignorada por formato incorrecto: {0}", linea);
         }
     }
 
     public int[] calcularEstadisticas(String equipo) {
         int[] stats = new int[4]; // [V, D, E, Goles]
-        String busqueda = equipo.trim().toLowerCase();
-
+        
         for (Partido p : partidos) {
-            boolean esLocal = p.getEquipoLocal().toLowerCase().equals(busqueda);
-            boolean esVisitante = p.getEquipoVisitante().toLowerCase().equals(busqueda);
-
-            if (esLocal || esVisitante) {
-                stats[3] += esLocal ? p.getGolesLocal() : p.getGolesVisitante();
-
-                if (p.getGolesLocal() == p.getGolesVisitante()) {
-                    stats[2]++;
-                } else if ((esLocal && p.getGolesLocal() > p.getGolesVisitante()) || 
-                           (esVisitante && p.getGolesVisitante() > p.getGolesLocal())) {
-                    stats[0]++;
-                } else {
-                    stats[1]++;
-                }
-            }
+            procesarPartidoParaEstadisticas(p, equipo, stats);
         }
         return stats;
+    }
+
+    // Refactorización: Lógica de cálculo aislada para mayor claridad
+    private void procesarPartidoParaEstadisticas(Partido p, String equipo, int[] stats) {
+        // Usamos equalsIgnoreCase para mayor robustez
+        boolean esLocal = p.getEquipoLocal().equalsIgnoreCase(equipo);
+        boolean esVisitante = p.getEquipoVisitante().equalsIgnoreCase(equipo);
+
+        if (!esLocal && !esVisitante) {
+            return; // Si no es el equipo, pasamos al siguiente
+        }
+
+        // Determinar goles a favor y en contra
+        int golesFavor = esLocal ? p.getGolesLocal() : p.getGolesVisitante();
+        int golesContra = esLocal ? p.getGolesVisitante() : p.getGolesLocal();
+
+        stats[3] += golesFavor; // Sumar goles
+
+        // Determinar resultado
+        if (golesFavor > golesContra) {
+            stats[0]++; // Victoria
+        } else if (golesFavor < golesContra) {
+            stats[1]++; // Derrota
+        } else {
+            stats[2]++; // Empate
+        }
     }
 }
